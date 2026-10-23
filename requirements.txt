@@ -6,3 +6,14 @@ matplotlib
 plotly
 altair
 streamlit-autorefresh
+streamlit
+pandas
+numpy
+matplotlib
+plotly
+altair
+streamlit-autorefresh
+streamlit-webrtc
+av
+opencv-python-headless
+mediapipe==0.10.21
