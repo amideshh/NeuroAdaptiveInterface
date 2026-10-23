@@ -89,8 +89,9 @@ st_autorefresh(
     key="dashboard_auto_refresh"
 )
 
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_DIR = os.path.join(BASE_DIR, "session_logs")
+LOG_DIR = BASE_DIR
 
 SUMMARY_FILE = os.path.join(
     LOG_DIR, "session_summary.csv"
@@ -103,6 +104,7 @@ EVENT_FILE = os.path.join(
 ANALYSIS_FILE = os.path.join(
     LOG_DIR, "overload_analysis.csv"
 )
+
 
 
 def load_csv(path):
