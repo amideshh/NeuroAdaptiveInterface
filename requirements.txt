@@ -9,3 +9,4 @@ streamlit-webrtc
 av
 opencv-python-headless
 mediapipe==0.10.21
+opencv-python-headless
