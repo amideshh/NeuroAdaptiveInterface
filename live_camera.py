@@ -202,7 +202,6 @@ def process_frame(frame):
 # --------------------------------------------------
 # STREAMLIT CAMERA UI
 # --------------------------------------------------
-
 def render_live_camera():
     st.divider()
     st.header("📷 Live Webcam Monitoring")
@@ -218,12 +217,12 @@ def render_live_camera():
         "processing. Start the camera only if you consent."
     )
 
-rtc_config = {
-    "iceServers": [
-        {"urls": ["stun:stun.cloudflare.com:3478"]},
-        {"urls": ["stun:stun.l.google.com:19302"]}
-    ]
-}
+    rtc_config = {
+        "iceServers": [
+            {"urls": ["stun:stun.cloudflare.com:3478"]},
+            {"urls": ["stun:stun.l.google.com:19302"]}
+        ]
+    }
 
     webrtc_streamer(
         key="neuroadaptive-live-camera",
