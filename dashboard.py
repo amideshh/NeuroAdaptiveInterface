@@ -1088,7 +1088,6 @@ else:
                         "Baseline metrics are missing from the analysis CSV. "
                         "Run `python overload_analysis.py` to regenerate it."
                     )
-
             st.markdown(
                 '<div class="dashboard-note">'
                 'This is a descriptive prototype, not a validated overload '
@@ -1097,7 +1096,8 @@ else:
                 '</div>',
                 unsafe_allow_html=True
             )
-            # --------------------------------------------------
+
+# --------------------------------------------------
 # LIVE BROWSER WEBCAM
 # --------------------------------------------------
 
