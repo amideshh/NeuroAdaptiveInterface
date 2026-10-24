@@ -1097,6 +1097,13 @@ else:
                 '</div>',
                 unsafe_allow_html=True
             )
+            # --------------------------------------------------
+# LIVE BROWSER WEBCAM
+# --------------------------------------------------
+
+from live_camera import render_live_camera
+
+render_live_camera()
 
 # --------------------------------------------------
 # SESSION HISTORY
