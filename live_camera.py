@@ -9,7 +9,7 @@ import mediapipe as mp
 import streamlit as st
 
 from streamlit_webrtc import webrtc_streamer, WebRtcMode
-File "live_camera.py", line 6, in <module>
+
 
 # --------------------------------------------------
 # SHARED LIVE CAMERA STATE
