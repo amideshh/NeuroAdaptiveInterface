@@ -1,11 +1,3 @@
-
-streamlit
-pandas
-numpy
-matplotlib
-plotly
-altair
-streamlit-autorefresh
 streamlit
 pandas
 numpy
