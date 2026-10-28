@@ -99,80 +99,85 @@ page = st.sidebar.radio(
 
 
 # ---------------------------------------
-# HOME PAGE
+# HOME PAGE - BROWSER CAMERA
 # ---------------------------------------
 
 if page == "Home":
 
-    st.header("Welcome")
+    from streamlit_webrtc import webrtc_streamer, WebRtcMode
+    from webcam_processor import NeuroVideoProcessor
 
-    st.write(
-        "Start a monitoring session using your existing "
-        "face_demo.py. Session information is saved in CSV files."
+    st.header("🎥 Live Camera Monitoring")
+
+    st.info(
+        "Allow camera permission in your browser. "
+        "Look straight at the camera while calibration collects samples."
     )
 
-    col1, col2 = st.columns(2)
+    ctx = webrtc_streamer(
+        key="neuroadaptive-camera",
+        mode=WebRtcMode.SENDRECV,
+        video_processor_factory=NeuroVideoProcessor,
+        media_stream_constraints={
+            "video": True,
+            "audio": False
+        },
+        async_processing=True
+    )
 
-    with col1:
-        if st.button(
-            "▶ Start Monitoring",
-            type="primary",
-            use_container_width=True
-        ):
-            process = st.session_state.camera_process
+    st.caption(
+        "Camera processing happens in your browser video stream. "
+        "No separate OpenCV window is required."
+    )
 
-            if process is not None and process.poll() is None:
-                st.warning("Monitoring is already running.")
-            elif not os.path.exists(FACE_DEMO):
-                st.error("face_demo.py was not found.")
-            else:
-                try:
-                    st.session_state.camera_process = (
-                        subprocess.Popen(
-                            [sys.executable, FACE_DEMO],
-                            cwd=BASE_DIR
-                        )
-                    )
-                    st.success(
-                        "Monitoring started. Check the OpenCV camera window."
-                    )
-                except Exception as exc:
-                    st.error("Could not start monitoring: {}".format(exc))
+    if ctx.video_processor:
+        processor = ctx.video_processor
 
-    with col2:
-        if st.button(
-            "🔄 Refresh Status",
-            use_container_width=True
-        ):
-            st.rerun()
+        with processor.lock:
+            c1, c2, c3, c4 = st.columns(4)
 
-    process = st.session_state.camera_process
+            c1.metric("Face", "Detected" if processor.face_detected else "Not detected")
+            c2.metric("Gaze", processor.gaze)
+            c3.metric("Eye status", processor.eye_status)
+            c4.metric("Blinks", processor.blinks)
 
-    if process is not None and process.poll() is None:
-        st.success("Monitoring process is running.")
-        st.warning(
-            "To end the session, click the OpenCV camera window "
-            "and press Q. The script will save the session CSV."
-        )
-    else:
-        st.caption("Monitoring is not currently running.")
+            st.write("**Head direction:**", processor.head)
+            st.write("**Calibration:**", "Complete" if processor.calibrated else "Collecting samples")
+            st.write("**Status:**", processor.message)
+
+            st.write("**Session duration:** {:.1f} sec".format(
+                time.time() - processor.started_at
+            ))
+
+            a, b = st.columns(2)
+
+            with a:
+                if st.button("🔄 Reset Calibration", use_container_width=True):
+                    processor.reset_calibration()
+                    st.rerun()
+
+            with b:
+                if st.button("💾 Save Session", use_container_width=True):
+                    processor.save_session()
+                    st.success("Session save requested. Check Session Dashboard.")
+                    st.rerun()
 
     st.divider()
-    st.subheader("How to use")
 
+    st.subheader("How to use")
     st.markdown(
         """
-        1. Click **Start Monitoring**.
-        2. Look straight at the camera.
-        3. Press **C** 20 times to calibrate head and gaze.
-        4. Continue monitoring.
-        5. Press **Q** in the camera window to save and end the session.
-        6. Open Session Dashboard or Session History to review the CSV data.
+        1. Start the camera above.
+        2. Allow camera access when your browser asks.
+        3. Look straight at the camera while calibration collects 20 samples.
+        4. Move your eyes and head naturally to test tracking.
+        5. Click **Save Session** before leaving the page.
+        6. Review saved data in Session Dashboard or Session History.
         """
     )
 
     st.caption(
-        "Use this system only with the camera user's consent."
+        "Experimental prototype only. Signals are not a medical diagnosis."
     )
 
 
