@@ -1,0 +1,20 @@
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.streamlit/secrets.toml
+
+# Local session data and backups
+session_logs/*.csv
+session_logs/*.csv.*
+session_logs/*.bak
+
+# Local editor files
+.idea/
+.vscode/
+# Session reports and generated data
+session_reports/*.csv
+session_logs/
+*.pre_fix_backup
