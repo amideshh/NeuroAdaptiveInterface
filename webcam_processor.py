@@ -379,8 +379,6 @@ class NeuroVideoProcessor(VideoProcessorBase):
         with self.lock:
             if self.saved:
                 return
-            self.saved = True
-
             end = time.time()
             self.update_analytics(end)
 
@@ -437,12 +435,13 @@ class NeuroVideoProcessor(VideoProcessorBase):
                         writer.writeheader()
 
                     writer.writerow(row)
+                self.saved = True
 
                 self.log_event("SESSION_ENDED", "Browser camera session ended")
             except (OSError, csv.Error) as exc:
                 self.message = "Could not save session: {}".format(exc)
 
-    def recv(self, frame):
+    def _process_frame(self, frame):
         with self.lock:
             image = frame.to_ndarray(format="bgr24")
             image = cv2.flip(image, 1)
@@ -630,3 +629,39 @@ class NeuroVideoProcessor(VideoProcessorBase):
             )
 
             return av.VideoFrame.from_ndarray(image, format="bgr24")
+
+
+    def recv(self, frame):
+        """
+        Safe WebRTC callback.
+
+        An exception inside MediaPipe/OpenCV must not escape the WebRTC
+        worker callback, because that can terminate the video track and make
+        the camera component disappear from the Streamlit page.
+        """
+        try:
+            return self._process_frame(frame)
+        except Exception as exc:
+            # Keep the stream alive by returning the incoming frame.
+            with self.lock:
+                self.message = "Frame processing issue: {}".format(
+                    str(exc)[:120]
+                )
+                self.face_detected = False
+                self.gaze = "UNKNOWN"
+                self.head = "PROCESSING ERROR"
+                self.eye_status = "UNKNOWN"
+
+            # The full traceback is visible in Streamlit Cloud logs.
+            import traceback
+            traceback.print_exc()
+            return frame
+
+    def __del__(self):
+        """Release MediaPipe resources when WebRTC destroys the processor."""
+        try:
+            mesh = getattr(self, "mesh", None)
+            if mesh is not None:
+                mesh.close()
+        except Exception:
+            pass
