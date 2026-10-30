@@ -32,15 +32,10 @@ st.set_page_config(
 # ---------------------------------------------------------
 
 def get_rtc_configuration():
-    """
-    Read TURN credentials from Streamlit Secrets.
-    Never place TURN credentials directly in this file.
-    """
+    """Read TURN credentials from Streamlit Secrets."""
 
     ice_servers = [
-        {
-            "urls": "stun:stun.relay.metered.ca:80"
-        }
+        {"urls": "stun:stun.relay.metered.ca:80"}
     ]
 
     try:
@@ -74,25 +69,9 @@ def get_rtc_configuration():
         ])
 
     except (KeyError, ValueError):
-        st.warning(
-            "TURN credentials are missing or empty. "
-            "Using STUN only. Check Streamlit Secrets."
-        )
+        st.warning("TURN credentials missing. Using STUN only.")
 
-    return {
-        "iceServers": ice_servers
-    }
-
-    except Exception:
-        st.warning(
-            "TURN credentials are not configured. "
-            "Using STUN only. Add TURN_USERNAME and "
-            "TURN_CREDENTIAL in Streamlit Secrets."
-        )
-
-    return {
-        "iceServers": ice_servers
-    }
+    return {"iceServers": ice_servers}
 
 
 # ---------------------------------------------------------
