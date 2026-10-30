@@ -30,6 +30,7 @@ st.set_page_config(
 # ---------------------------------------------------------
 # METERED TURN CONFIGURATION
 # ---------------------------------------------------------
+
 def get_rtc_configuration():
     """
     Read TURN credentials from Streamlit Secrets.
@@ -71,6 +72,16 @@ def get_rtc_configuration():
                 "credential": turn_credential
             }
         ])
+
+    except (KeyError, ValueError):
+        st.warning(
+            "TURN credentials are missing or empty. "
+            "Using STUN only. Check Streamlit Secrets."
+        )
+
+    return {
+        "iceServers": ice_servers
+    }
 
     except Exception:
         st.warning(
