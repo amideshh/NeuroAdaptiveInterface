@@ -4,7 +4,7 @@ import time
 import csv
 from datetime import datetime
 from collections import deque
-
+from streamlit_autorefresh import st_autorefresh
 import av
 import cv2
 import mediapipe as mp
@@ -18,7 +18,10 @@ from streamlit_webrtc import (
     VideoProcessorBase,
     WebRtcMode
 )
-
+st_autorefresh(
+    interval=1000,
+    key="camera_metrics_refresh"
+    )
 # ---------------------------------------
 # SETTINGS
 # ---------------------------------------
