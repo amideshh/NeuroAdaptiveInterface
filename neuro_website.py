@@ -1,3 +1,4 @@
+
 import os
 import time
 
@@ -6,7 +7,6 @@ import plotly.express as px
 import streamlit as st
 from streamlit_webrtc import WebRtcMode, webrtc_streamer
 
-# Keep this module in the same GitHub folder as neuro_website.py.
 from webcam_processor import NeuroVideoProcessor
 
 
@@ -28,26 +28,92 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------
+# METERED TURN CONFIGURATION
+# ---------------------------------------------------------
+def get_rtc_configuration():
+    """
+    Read TURN credentials from Streamlit Secrets.
+    Never place TURN credentials directly in this file.
+    """
+
+    ice_servers = [
+        {
+            "urls": "stun:stun.relay.metered.ca:80"
+        }
+    ]
+
+    try:
+        turn_username = st.secrets["TURN_USERNAME"]
+        turn_credential = st.secrets["TURN_CREDENTIAL"]
+
+        if not turn_username or not turn_credential:
+            raise ValueError("TURN credentials are empty.")
+
+        ice_servers.extend([
+            {
+                "urls": "turn:global.relay.metered.ca:80",
+                "username": turn_username,
+                "credential": turn_credential
+            },
+            {
+                "urls": "turn:global.relay.metered.ca:80?transport=tcp",
+                "username": turn_username,
+                "credential": turn_credential
+            },
+            {
+                "urls": "turn:global.relay.metered.ca:443",
+                "username": turn_username,
+                "credential": turn_credential
+            },
+            {
+                "urls": "turns:global.relay.metered.ca:443?transport=tcp",
+                "username": turn_username,
+                "credential": turn_credential
+            }
+        ])
+
+    except Exception:
+        st.warning(
+            "TURN credentials are not configured. "
+            "Using STUN only. Add TURN_USERNAME and "
+            "TURN_CREDENTIAL in Streamlit Secrets."
+        )
+
+    return {
+        "iceServers": ice_servers
+    }
+
+
+# ---------------------------------------------------------
 # DATA HELPERS
 # ---------------------------------------------------------
 def read_csv_safely(path):
     """Read a CSV without stopping the whole dashboard if it is missing."""
+
     if not os.path.exists(path):
         return pd.DataFrame()
 
     try:
         return pd.read_csv(path, on_bad_lines="skip")
+
     except Exception as exc:
         st.warning(
-            "Could not read {}: {}".format(os.path.basename(path), exc)
+            "Could not read {}: {}".format(
+                os.path.basename(path), exc
+            )
         )
         return pd.DataFrame()
 
 
 def load_summary():
     df = read_csv_safely(SUMMARY_FILE)
+
     if not df.empty and "Session_ID" in df.columns:
-        df = df.drop_duplicates(subset=["Session_ID"], keep="last")
+        df = df.drop_duplicates(
+            subset=["Session_ID"],
+            keep="last"
+        )
+
     return df.reset_index(drop=True)
 
 
@@ -57,7 +123,9 @@ def load_events():
 
 def number(value, default=0.0):
     """Convert a CSV value to a safe number."""
+
     result = pd.to_numeric(value, errors="coerce")
+
     return default if pd.isna(result) else float(result)
 
 
@@ -65,11 +133,23 @@ def show_session_details(session, available_columns):
     st.subheader("📌 Selected Session Details")
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Duration", "{:.2f} sec".format(
-        number(session.get("duration_seconds", 0))
-    ))
-    c2.metric("Blink Count", int(number(session.get("blink_count", 0))))
-    c3.metric("Look-away Count", int(number(session.get("look_away_count", 0))))
+
+    c1.metric(
+        "Duration",
+        "{:.2f} sec".format(
+            number(session.get("duration_seconds", 0))
+        )
+    )
+
+    c2.metric(
+        "Blink Count",
+        int(number(session.get("blink_count", 0)))
+    )
+
+    c3.metric(
+        "Look-away Count",
+        int(number(session.get("look_away_count", 0)))
+    )
 
     gaze_fields = {
         "Center Gaze (sec)": "center_gaze_seconds",
@@ -79,15 +159,19 @@ def show_session_details(session, available_columns):
     }
 
     gaze_rows = []
+
     for label, field in gaze_fields.items():
         if field in available_columns:
             gaze_rows.append({
                 "Signal": label,
-                "Duration (sec)": round(number(session.get(field, 0)), 2)
+                "Duration (sec)": round(
+                    number(session.get(field, 0)), 2
+                )
             })
 
     if gaze_rows:
         st.subheader("👁️ Gaze Signal Summary")
+
         st.dataframe(
             pd.DataFrame(gaze_rows),
             use_container_width=True,
@@ -97,21 +181,32 @@ def show_session_details(session, available_columns):
     with st.expander("📄 Complete Session Record"):
         details = session.to_frame(name="Value")
         details.index.name = "Field"
-        st.dataframe(details, use_container_width=True)
+
+        st.dataframe(
+            details,
+            use_container_width=True
+        )
 
 
 # ---------------------------------------------------------
 # HEADER AND NAVIGATION
 # ---------------------------------------------------------
 st.title("🧠 NeuroAdaptiveInterface")
+
 st.caption(
     "Experimental facial-signal monitoring and session analytics"
 )
 
 st.sidebar.title("Navigation")
+
 page = st.sidebar.radio(
     "Choose a page",
-    ["Home", "Session Dashboard", "Session History", "Event Log"]
+    [
+        "Home",
+        "Session Dashboard",
+        "Session History",
+        "Event Log"
+    ]
 )
 
 
@@ -119,20 +214,17 @@ page = st.sidebar.radio(
 # HOME - BROWSER CAMERA
 # ---------------------------------------------------------
 if page == "Home":
+
     st.header("🎥 Live Camera Monitoring")
 
     st.info(
-        "Allow camera permission in your browser. Look straight at the "
-        "camera while calibration collects samples."
+        "Allow camera permission in your browser. "
+        "Look straight at the camera while calibration "
+        "collects samples."
     )
 
-    # Use one STUN server. Do not configure TURN unless you have TURN
-    # credentials from a provider.
-    rtc_configuration = {
-        "iceServers": [
-            {"urls": ["stun:stun.l.google.com:19302"]}
-        ]
-    }
+    # Metered TURN + STUN configuration
+    rtc_configuration = get_rtc_configuration()
 
     ctx = webrtc_streamer(
         key="neuroadaptive-camera",
@@ -154,8 +246,7 @@ if page == "Home":
     processor = ctx.video_processor
 
     if processor is not None:
-        # Read values under the processor lock because the WebRTC callback
-        # updates them in a separate worker thread.
+
         with processor.lock:
             face_detected = processor.face_detected
             gaze = processor.gaze
@@ -167,17 +258,27 @@ if page == "Home":
             started_at = processor.started_at
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Face", "Detected" if face_detected else "Not detected")
+
+        c1.metric(
+            "Face",
+            "Detected" if face_detected else "Not detected"
+        )
+
         c2.metric("Gaze", str(gaze))
+
         c3.metric("Eye status", str(eye_status))
+
         c4.metric("Blinks", int(blinks))
 
         st.write("**Head direction:**", head)
+
         st.write(
             "**Calibration:**",
             "Complete" if calibrated else "Collecting samples"
         )
+
         st.write("**Status:**", message)
+
         st.write(
             "**Session duration:** {:.1f} sec".format(
                 max(0.0, time.time() - started_at)
@@ -185,27 +286,40 @@ if page == "Home":
         )
 
         a, b = st.columns(2)
+
         with a:
-            if st.button("🔄 Reset Calibration", use_container_width=True):
+            if st.button(
+                "🔄 Reset Calibration",
+                use_container_width=True
+            ):
                 processor.reset_calibration()
                 st.success("Calibration reset requested.")
                 st.rerun()
 
         with b:
-            if st.button("💾 Save Session", use_container_width=True):
+            if st.button(
+                "💾 Save Session",
+                use_container_width=True
+            ):
                 processor.save_session()
+
                 st.success(
-                    "Save request sent. Check the Session Dashboard."
+                    "Save request sent. "
+                    "Check the Session Dashboard."
                 )
+
                 st.rerun()
 
     elif ctx.state.playing:
         st.info("Camera is connecting. Please wait.")
+
     else:
         st.info("Press START to begin camera monitoring.")
 
     st.divider()
+
     st.subheader("How to use")
+
     st.markdown(
         """
         1. Press **START** and allow camera access.
@@ -215,6 +329,7 @@ if page == "Home":
         5. Review saved data in Session Dashboard or Session History.
         """
     )
+
     st.caption(
         "Experimental prototype only. Camera signals are not a medical "
         "diagnosis or a validated cognitive-overload measurement."
@@ -225,6 +340,7 @@ if page == "Home":
 # SESSION DASHBOARD
 # ---------------------------------------------------------
 elif page == "Session Dashboard":
+
     st.header("📊 Session Dashboard")
 
     if st.button("↻ Refresh Dashboard"):
@@ -233,12 +349,22 @@ elif page == "Session Dashboard":
     df = load_summary()
 
     if df.empty:
-        st.warning("No saved sessions found yet. Start a session and save it.")
+
+        st.warning(
+            "No saved sessions found yet. "
+            "Start a session and save it."
+        )
+
     else:
+
         if "Session_ID" not in df.columns:
-            st.error("Session_ID column is missing from session_summary.csv.")
+
+            st.error(
+                "Session_ID column is missing from session_summary.csv."
+            )
+
         else:
-            # Convert available metric columns to numeric values.
+
             numeric_columns = [
                 "duration_seconds",
                 "blink_count",
@@ -248,51 +374,73 @@ elif page == "Session Dashboard":
                 "unknown_gaze_seconds",
                 "eyes_closed_seconds"
             ]
+
             for col in numeric_columns:
                 if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
+                    df[col] = pd.to_numeric(
+                        df[col],
+                        errors="coerce"
+                    )
 
             latest = df.iloc[-1]
 
             st.subheader("Latest Session Overview")
+
             c1, c2, c3, c4 = st.columns(4)
+
             c1.metric("Total Sessions", len(df))
+
             c2.metric(
                 "Latest Duration",
-                "{:.1f} sec".format(number(latest.get("duration_seconds", 0)))
+                "{:.1f} sec".format(
+                    number(latest.get("duration_seconds", 0))
+                )
             )
-            c3.metric("Latest Blinks", int(number(latest.get("blink_count", 0))))
+
+            c3.metric(
+                "Latest Blinks",
+                int(number(latest.get("blink_count", 0)))
+            )
+
             c4.metric(
                 "Look-away Warnings",
                 int(number(latest.get("look_away_count", 0)))
             )
 
             st.subheader("Latest Session Record")
+
             st.dataframe(
                 pd.DataFrame([latest]),
                 use_container_width=True,
                 hide_index=True
             )
 
-            # Gaze time distribution for latest session.
+            # Gaze time distribution
             st.subheader("👁️ Gaze Time Distribution")
+
             gaze_labels = {
                 "center_gaze_seconds": "Center Gaze",
                 "look_away_seconds": "Look-away",
                 "unknown_gaze_seconds": "Unknown Gaze",
                 "eyes_closed_seconds": "Eyes Closed"
             }
+
             available_gaze = [
                 col for col in gaze_labels if col in df.columns
             ]
 
             if available_gaze:
+
                 gaze_chart = pd.DataFrame({
-                    "Gaze Signal": [gaze_labels[col] for col in available_gaze],
+                    "Gaze Signal": [
+                        gaze_labels[col] for col in available_gaze
+                    ],
                     "Time (seconds)": [
-                        number(latest.get(col, 0)) for col in available_gaze
+                        number(latest.get(col, 0))
+                        for col in available_gaze
                     ]
                 })
+
                 fig = px.bar(
                     gaze_chart,
                     x="Time (seconds)",
@@ -301,94 +449,146 @@ elif page == "Session Dashboard":
                     text="Time (seconds)",
                     title="Latest Session Gaze Time"
                 )
+
                 fig.update_layout(
                     height=350,
                     yaxis_title="",
                     xaxis_title="Time (seconds)",
-                    yaxis={"categoryorder": "total ascending"}
+                    yaxis={
+                        "categoryorder": "total ascending"
+                    }
                 )
-                st.plotly_chart(fig, use_container_width=True)
+
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True
+                )
+
                 st.dataframe(
                     gaze_chart,
                     use_container_width=True,
                     hide_index=True
                 )
-            else:
-                st.info("Gaze time columns are not available in the CSV.")
 
-            # Compare recent sessions.
+            else:
+                st.info(
+                    "Gaze time columns are not available in the CSV."
+                )
+
+            # Compare recent sessions
             st.subheader("📊 Compare Sessions")
+
             compare_columns = [
                 col for col in [
-                    "duration_seconds", "blink_count", "look_away_count"
-                ] if col in df.columns
+                    "duration_seconds",
+                    "blink_count",
+                    "look_away_count"
+                ]
+                if col in df.columns
             ]
 
             if compare_columns:
+
                 compare_df = df.tail(10).copy()
+
                 compare_df["Session"] = (
-                    compare_df["Session_ID"].astype(str).str[-6:]
+                    compare_df["Session_ID"]
+                    .astype(str)
+                    .str[-6:]
                 )
+
                 compare_df = compare_df.set_index("Session")
+
                 selected_metrics = st.multiselect(
                     "Choose metrics to compare",
                     options=compare_columns,
                     default=compare_columns
                 )
+
                 if selected_metrics:
+
                     st.bar_chart(
                         compare_df[selected_metrics].fillna(0),
                         height=350,
                         use_container_width=True
                     )
+
                     st.dataframe(
                         compare_df[selected_metrics],
                         use_container_width=True
                     )
+
                 else:
                     st.info("Select at least one metric.")
-            else:
-                st.info("Session comparison columns are not available.")
 
-            # Session duration chart.
+            else:
+                st.info(
+                    "Session comparison columns are not available."
+                )
+
+            # Session duration chart
             st.subheader("Session Duration")
+
             if "duration_seconds" in df.columns:
+
                 duration_df = df.tail(10).copy()
+
                 duration_df["Session"] = (
-                    duration_df["Session_ID"].astype(str).str[-6:]
+                    duration_df["Session_ID"]
+                    .astype(str)
+                    .str[-6:]
                 )
+
                 duration_df["duration_seconds"] = pd.to_numeric(
-                    duration_df["duration_seconds"], errors="coerce"
+                    duration_df["duration_seconds"],
+                    errors="coerce"
                 )
+
                 duration_df = duration_df.dropna(
                     subset=["duration_seconds"]
                 ).set_index("Session")
 
                 if not duration_df.empty:
+
                     st.bar_chart(
                         duration_df[["duration_seconds"]],
                         height=320,
                         use_container_width=True
                     )
+
                 else:
                     st.info("No valid duration values found.")
-            else:
-                st.info("duration_seconds column is not available.")
 
-            # Blink and look-away chart.
+            else:
+                st.info(
+                    "duration_seconds column is not available."
+                )
+
+            # Blink and look-away chart
             st.subheader("Blink and Look-away Counts")
+
             count_columns = [
-                col for col in ["blink_count", "look_away_count"]
+                col for col in [
+                    "blink_count",
+                    "look_away_count"
+                ]
                 if col in df.columns
             ]
+
             if count_columns:
+
                 count_df = df.tail(10).copy()
+
                 count_df["Session"] = (
-                    count_df["Session_ID"].astype(str).str[-6:]
+                    count_df["Session_ID"]
+                    .astype(str)
+                    .str[-6:]
                 )
+
                 for col in count_columns:
                     count_df[col] = pd.to_numeric(
-                        count_df[col], errors="coerce"
+                        count_df[col],
+                        errors="coerce"
                     ).fillna(0)
 
                 plot_df = count_df.melt(
@@ -397,6 +597,7 @@ elif page == "Session Dashboard":
                     var_name="Signal",
                     value_name="Count"
                 )
+
                 fig = px.bar(
                     plot_df,
                     x="Count",
@@ -406,17 +607,26 @@ elif page == "Session Dashboard":
                     orientation="h",
                     text="Count"
                 )
+
                 fig.update_layout(
                     height=420,
                     xaxis_title="Count",
                     yaxis_title="Session ID"
                 )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Blink/look-away count columns are not available.")
 
-            # Recent session table.
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True
+                )
+
+            else:
+                st.info(
+                    "Blink/look-away count columns are not available."
+                )
+
+            # Recent session table
             st.subheader("Recent Session History")
+
             history_columns = [
                 col for col in [
                     "Session_ID",
@@ -426,9 +636,12 @@ elif page == "Session Dashboard":
                     "eye_closure_warning_count",
                     "Calibrated",
                     "Last_Event"
-                ] if col in df.columns
+                ]
+                if col in df.columns
             ]
+
             if history_columns:
+
                 st.dataframe(
                     df[history_columns].tail(10).iloc[::-1],
                     use_container_width=True,
@@ -445,69 +658,114 @@ elif page == "Session Dashboard":
 # SESSION HISTORY
 # ---------------------------------------------------------
 elif page == "Session History":
+
     st.header("📁 Session History")
+
     df = load_summary()
 
     if df.empty:
+
         st.info("No saved sessions found.")
+
     elif "Session_ID" not in df.columns:
-        st.error("Session_ID column is missing from session_summary.csv.")
+
+        st.error(
+            "Session_ID column is missing from session_summary.csv."
+        )
+
     else:
+
         history = df.iloc[::-1].reset_index(drop=True)
 
         st.subheader("All Saved Sessions")
+
         st.dataframe(
             history,
             use_container_width=True,
             hide_index=True
         )
 
-        session_ids = history["Session_ID"].astype(str).tolist()
+        session_ids = (
+            history["Session_ID"].astype(str).tolist()
+        )
+
         selected = st.selectbox(
             "Select a session to view details",
             session_ids
         )
-        match = history[history["Session_ID"].astype(str) == selected]
+
+        match = history[
+            history["Session_ID"].astype(str) == selected
+        ]
 
         if not match.empty:
-            show_session_details(match.iloc[0], history.columns)
+            show_session_details(
+                match.iloc[0],
+                history.columns
+            )
 
 
 # ---------------------------------------------------------
 # EVENT LOG
 # ---------------------------------------------------------
 elif page == "Event Log":
+
     st.header("📝 Event Log")
+
     events = load_events()
 
     if events.empty:
+
         st.info("No events recorded yet.")
+
     else:
+
         events = events.copy()
+
         st.subheader("🔍 Filter Events")
 
         col1, col2 = st.columns(2)
+
         with col1:
+
             if "Session_ID" in events.columns:
+
                 session_ids = (
-                    events["Session_ID"].dropna().astype(str).unique().tolist()
+                    events["Session_ID"]
+                    .dropna()
+                    .astype(str)
+                    .unique()
+                    .tolist()
                 )
+
                 selected_session = st.selectbox(
                     "Filter by session",
-                    ["All Sessions"] + sorted(session_ids, reverse=True)
+                    ["All Sessions"] + sorted(
+                        session_ids,
+                        reverse=True
+                    )
                 )
+
             else:
                 selected_session = "All Sessions"
 
         with col2:
+
             if "Event" in events.columns:
+
                 event_types = (
-                    events["Event"].dropna().astype(str).unique().tolist()
+                    events["Event"]
+                    .dropna()
+                    .astype(str)
+                    .unique()
+                    .tolist()
                 )
+
                 selected_event = st.selectbox(
                     "Filter by event type",
                     ["All Events"] + sorted(event_types)
                 )
+
             else:
                 selected_event = "All Events"
 
@@ -515,6 +773,7 @@ elif page == "Event Log":
             "⭐ Show important events only",
             value=False
         )
+
         important_events = [
             "BLINK",
             "LOOK_AWAY_WARNING",
@@ -528,20 +787,34 @@ elif page == "Event Log":
             selected_session != "All Sessions"
             and "Session_ID" in events.columns
         ):
+
             events = events[
-                events["Session_ID"].astype(str) == selected_session
+                events["Session_ID"].astype(str)
+                == selected_session
             ]
 
-        if selected_event != "All Events" and "Event" in events.columns:
-            events = events[events["Event"].astype(str) == selected_event]
+        if (
+            selected_event != "All Events"
+            and "Event" in events.columns
+        ):
+
+            events = events[
+                events["Event"].astype(str) == selected_event
+            ]
 
         if show_important_only and "Event" in events.columns:
+
             events = events[
-                events["Event"].astype(str).str.upper().isin(important_events)
+                events["Event"]
+                .astype(str)
+                .str.upper()
+                .isin(important_events)
             ]
 
         events = events.iloc[::-1].reset_index(drop=True)
+
         st.divider()
+
         st.subheader("📊 Event Summary")
 
         event_names = (
@@ -551,25 +824,38 @@ elif page == "Event Log":
         )
 
         c1, c2, c3, c4 = st.columns(4)
+
         c1.metric("Total Events", len(events))
+
         c2.metric(
             "Look-away Warnings",
             int((event_names == "LOOK_AWAY_WARNING").sum())
         )
-        c3.metric("Blink Events", int((event_names == "BLINK").sum()))
+
+        c3.metric(
+            "Blink Events",
+            int((event_names == "BLINK").sum())
+        )
+
         c4.metric(
             "Session Ended",
             int((event_names == "SESSION_ENDED").sum())
         )
 
         if events.empty:
-            st.warning("No events match the selected filters.")
+
+            st.warning(
+                "No events match the selected filters."
+            )
+
         else:
+
             st.dataframe(
                 events,
                 use_container_width=True,
                 hide_index=True
             )
+
             st.download_button(
                 label="⬇️ Download Events as CSV",
                 data=events.to_csv(index=False).encode("utf-8"),
@@ -578,5 +864,11 @@ elif page == "Event Log":
             )
 
 
+# ---------------------------------------------------------
+# FOOTER
+# ---------------------------------------------------------
 st.divider()
-st.caption("NeuroAdaptiveInterface · Experimental research prototype")
+
+st.caption(
+    "NeuroAdaptiveInterface · Experimental research prototype"
+)
